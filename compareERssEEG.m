@@ -16,7 +16,6 @@ if sort==54;
 
     %Load NvK channels
     channelsNvK = load(fullfile(V(1).folder, [pat(1).RESPnum '_channels_NvK.mat']));
-%     cc_channelsNvK = 
     chNvK= table2cell(channelsNvK.cc_channels(:,1));
     visERsNvK.ch=chNvK;
 
