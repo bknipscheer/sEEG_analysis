@@ -180,22 +180,35 @@ ylim([-800 800])
 
 clearvars -except pat tb_events tb_channels
 
-%% visually score ERs
-
-start_rating = 77;%1;
-stop_rating = size(pat(1).epoch_sorted_avg,2);
-
-for trial=start_rating:stop_rating
-    visERs = rate_visERssEEG(pat,trial);
-    pat(1).visERs(trial) = visERs;
-end
-
-% clearvars -except pat tb_events tb_channels
-
-
 %% detect ERs
 
 pat(1).detERs = detectERssEEG(pat);
+
+clearvars -except pat tb_events tb_channels
+
+%% Load false positive ERs
+
+[visERs,quadrant] = compareERssEEG(pat);
+pat(1).loadvisERs=visERs;
+pat(1).quadrant=quadrant;
+
+clearvars -except pat tb_events tb_channels
+
+%% visually score ERs
+
+start_rating = 1;
+stop_rating = size(pat(1).epoch_sorted_avg,2);
+
+for trial=start_rating:stop_rating
+    elec=pat(1).quadrant(trial).fp;
+    visERs = rate_visERssEEG(pat,trial,elec);
+    if stop_rating==54
+        pat(1).visERs2NvK(trial) = visERs;
+    elseif stop_rating==108
+        pat(1).visERs2DvB(trial) = visERs;
+    end
+end
+
 
 clearvars -except pat tb_events tb_channels
 

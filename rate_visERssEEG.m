@@ -8,7 +8,7 @@
 % after you finishes each part.
 
 
-function ERs = rate_visERssEEG(pat,trial)
+function ERs = rate_visERssEEG(pat,trial,elec)
 
 tt = pat(1).tt;
 epoch_sorted = pat(1).epoch_sorted;
@@ -22,7 +22,7 @@ ERs = struct;
 % for each stimulus
 % for trial=start_rating:stop_rating
 ER = [];
-for elec =1:size(epoch_sorted_avg,1)
+for elec = elec
     if ~ismember(elec,cc_stimsets(trial,1:2))
         % figure with left the epoch, and right zoomed in
         H=figure(1);
