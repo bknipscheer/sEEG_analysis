@@ -34,6 +34,19 @@ eventsFName = fullfile(D(1).folder, D(1).name);
 
 tb_events = readtable(eventsFName,'FileType','text','Delimiter','\t');
 
+% load electrodes
+D = dir(fullfile(dataPath,['sub-' sub_labels{i}],['ses-' ses_label],'ieeg',...
+    ['sub-' sub_labels{i} '_ses-' ses_label ,'_electrodes.tsv']));
+
+electrodesFName = fullfile(D(1).folder, D(1).name);
+
+tb_electrodes = readtable(electrodesFName,'FileType','text','Delimiter','\t');
+% log_elec_incl = strcmp(tb_electrodes.group,'depth');
+% tb_electrodes_incl = tb_electrodes(log_elec_incl,:);
+
+load('/home/bram/Desktop/CCEP/tb_electrodes_incl_mod.mat');
+tb_electrodes_incl = tb_electrodes_incl_mod;
+
 % load channels
 D = dir(fullfile(dataPath,['sub-' sub_labels{i}],['ses-' ses_label],'ieeg',...
     ['sub-' sub_labels{i} '_ses-' ses_label '_task-' task_label ,'_run-*_channels.tsv']));
@@ -42,10 +55,27 @@ channelsFName = fullfile(D(1).folder, D(1).name);
 
 tb_channels = readtable(channelsFName,'FileType','text','Delimiter','\t');
 % ch = tb_channels.name;
-
+%%
 % remove all unnecessary electrodes
 log_ch_incl = strcmp(tb_channels.status_description,'included');
 ch_incl = tb_channels.name(log_ch_incl);
+
+% Categorize the brain matter for every electrode
+for ch=1:size(ch_incl,1)
+    if strcmp(tb_electrodes_incl.screw(ch),'yes')
+        ch_incl(ch,2)={'other'};
+    elseif strcmp(tb_electrodes_incl.whitematter(ch),'yes') && (strcmp(tb_electrodes_incl.graymatter(ch),'yes')  ...
+            || strcmp(tb_electrodes_incl.hippocampus(ch),'yes') || strcmp(tb_electrodes_incl.amygdala(ch),'yes'))
+        ch_incl(ch,2)={'gw'};
+    elseif strcmp(tb_electrodes_incl.whitematter(ch),'yes')
+        ch_incl(ch,2)={'white'};
+    elseif strcmp(tb_electrodes_incl.graymatter(ch),'yes')  || strcmp(tb_electrodes_incl.hippocampus(ch),'yes') ...
+            || strcmp(tb_electrodes_incl.amygdala(ch),'yes')
+        ch_incl(ch,2)={'gray'};
+    else
+        ch_incl(ch,2)={'other'};
+    end
+end
 
 ccep_data = -1*ccep_dataraw(log_ch_incl,:); %*-1 because that's how the ECoG is displayed and visualized
 % put all information to use in one struct called "pat"
@@ -57,7 +87,7 @@ pat(i).ccep_data = ccep_data;
 pat(i).sample_start = tb_events.sample_start(strcmp(tb_events.sub_type,'SPES')==1);
 
 % remove all irrelevant variables
-clearvars -except pat tb_events tb_channels
+clearvars -except pat tb_events tb_channels tb_electrodes_incl
 
 %% find unique stimulation pairs and stimulus current
 
@@ -70,14 +100,15 @@ stimelecnum = NaN(size(all_stimchans,1),2);
 for stimp =1:size(all_stimchans,1)
     stimsplit = strsplit(all_stimchans{stimp},'-');
     for elec = 1:size(stimsplit,2)
-       stimelecnum(stimp,elec) = find(strcmp(pat(1).ch,stimsplit{elec}));
+
+            stimelecnum(stimp,elec) = find(strcmp(pat(1).ch,stimsplit{elec}));
     end
 end
 
 % get the unique number of stimulated pairs:
- % use [sort(stimelecnum,2) allstimcur] if you do not want to differentiate direction (positive/negative) of stimulation; 
- % use [stimelecnum, allstimcur] if you want to differentiate positive and negative stimulation
-stimelecs = [stimelecnum, all_stimcur];
+    % use [sort(stimelecnum,2) all_stimcur] if you do not want to differentiate direction (positive/negative) of stimulation; 
+    % use [stimelecnum, all_stimcur] if you want to differentiate positive and negative stimulation
+stimelecs = [sort(stimelecnum,2) all_stimcur];
 [cc_stimsets,IA,IC] = unique(stimelecs,'rows');
 
 % number of stimuli in each trial
@@ -93,7 +124,7 @@ pat(1).IC = IC;
 pat(1).stimnum_max = max(n);
 
 % remove all irrelevant variables
-clearvars -except pat tb_events tb_channels
+clearvars -except pat tb_events tb_channels tb_electrodes_incl
 
 %% epoch files in 2spre-2spost stimulus 
 epoch_length = 4; % in seconds, -2:2
@@ -113,7 +144,7 @@ pat(1).epoch_prestim = epoch_prestim;
 pat(1).data_epoch = data_epoch;
 pat(1).tt = tt;
 
-clearvars -except pat tb_events tb_channels
+clearvars -except pat tb_events tb_channels tb_electrodes_incl
 
 
 %% Make figures for specific epoch
@@ -131,7 +162,7 @@ ylabel('amplitude(uV)')
 title(sprintf('Electrode %s, stimulating %s, %d mA',ch_incl{elec},all_stimchans{trial},pat(1).all_stimcur(trial)))
 ylim([-1600 1600])
 
-clearvars -except pat tb_events tb_channels
+clearvars -except pat tb_events tb_channels tb_electrodes_incl
 
 
 %% Averaging epochs
@@ -154,7 +185,7 @@ pat(1).epoch_sorted = cc_epoch_sorted;
 pat(1).epoch_sorted_avg = cc_epoch_sorted_avg;
 pat(1).cc_stimchans = cc_stimchans;
 
-clearvars -except pat tb_events tb_channels
+clearvars -except pat tb_events tb_channels tb_electrodes_incl
 
 
 %% plot avg epoch
@@ -178,37 +209,61 @@ ylabel('amplitude(uV)')
 title(sprintf('Electrode %s, stimulating %s, %1.1f mA',ch{elec},stimnames{trial},stimsets(trial,3)))
 ylim([-800 800])
 
-clearvars -except pat tb_events tb_channels
+clearvars -except pat tb_events tb_channels tb_electrodes_incl
 
 %% detect ERs
 
 pat(1).detERs = detectERssEEG(pat);
 
-clearvars -except pat tb_events tb_channels
+clearvars -except pat tb_events tb_channels tb_electrodes_incl
+
+
+% Choose 'visually score ERs' or 'Load visERs'
+%% visually score ERs
+% start_rating = 1;
+% stop_rating = size(pat(1).epoch_sorted_avg,2);
+% 
+% for trial=start_rating:stop_rating
+%     elec=1:size(epoch_sorted_avg,1);
+%     visERs = rate_visERssEEG(pat,trial,elec);
+%     pat(1).visERs(trial) = visERs;
+% end
+% 
+% clearvars -except pat tb_events tb_channels tb_electrodes_incl
+
+%% Load visERs
+pat(1).visERs = loadERssEEG(pat);
+
+clearvars -except pat tb_events tb_channels tb_electrodes_incl
 
 %% Load false positive ERs
 
-[visERs,quadrant] = compareERssEEG(pat);
-pat(1).loadvisERs=visERs;
-pat(1).quadrant=quadrant;
+[cc_stim_network,cc_stimchans,stim_network,settings,channel,visERs,nrERs] = compareERssEEG(pat);
+pat(1).settings=settings;
+pat(1).nrERs=nrERs;
+pat(1).channel=channel;
+pat(1).channel=channel;
+pat(1).stim_network=stim_network;
+pat(1).cc_stimchans=cc_stimchans;
+pat(1).cc_stim_network=cc_stim_network;
 
-clearvars -except pat tb_events tb_channels
+clearvars -except pat tb_events tb_channels tb_electrodes_incl
 
-%% visually score ERs
+%% Create the Network Figures
+figure_grid(pat);
 
-start_rating = 1;
-stop_rating = size(pat(1).epoch_sorted_avg,2);
+%% visually score False positive ERs
+% start_rating = 1;
+% stop_rating = size(pat(1).epoch_sorted_avg,2);
+% 
+% for trial=start_rating:stop_rating
+%     elec=pat(1).quadrant(trial).fp;
+%     visERs = rate_visERssEEG(pat,trial,elec);
+%     if stop_rating==54
+%         pat(1).visERs2NvK(trial) = visERs;
+%     elseif stop_rating==108
+%         pat(1).visERs2DvB(trial) = visERs;
+%     end
+% end
 
-for trial=start_rating:stop_rating
-    elec=pat(1).quadrant(trial).fp;
-    visERs = rate_visERssEEG(pat,trial,elec);
-    if stop_rating==54
-        pat(1).visERs2NvK(trial) = visERs;
-    elseif stop_rating==108
-        pat(1).visERs2DvB(trial) = visERs;
-    end
-end
-
-
-clearvars -except pat tb_events tb_channels
-
+% clearvars -except pat tb_events tb_channels tb_electrodes_incl
